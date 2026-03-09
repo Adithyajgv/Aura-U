@@ -2,7 +2,7 @@
   "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
   "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <node>
-  <interface name="io.github.AuraU">
+  <interface name="io.AuraU">
 
     <method name="SetStaticColor">
       <arg name="r" type="y" direction="in"/>

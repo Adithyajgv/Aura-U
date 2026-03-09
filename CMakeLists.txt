@@ -1,46 +1,82 @@
 cmake_minimum_required(VERSION 3.20)
 project(Aura-U VERSION 1.0.0 LANGUAGES CXX)
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Dependencies
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB   REQUIRED libusb-1.0)
 pkg_check_modules(LIBEVDEV REQUIRED libevdev)
 pkg_check_modules(GTK4     REQUIRED gtk4)
 pkg_check_modules(ADW      REQUIRED libadwaita-1)
+pkg_check_modules(GLIB     REQUIRED gio-2.0)
 
-set(SOURCES
-    src/main.cpp
-    src/AuraCtrl.cpp
-    src/UsbCore.cpp
-    src/AuraController.cpp
-    src/InputListener.cpp
-    src/MainWindow.cpp
+# Daemon Executable
+set(DAEMON_SOURCES
+    src/daemon/main.cpp
+    src/daemon/AuraCtrl.cpp
+    src/daemon/UsbCore.cpp
+    src/daemon/InputListener.cpp
+    src/daemon/DBusServer.cpp
 )
 
-add_executable(Aura-U ${SOURCES})
+add_executable(daura-u ${DAEMON_SOURCES})
 
-target_include_directories(Aura-U PRIVATE
+target_include_directories(daura-u PRIVATE
     include
     ${LIBUSB_INCLUDE_DIRS}
     ${LIBEVDEV_INCLUDE_DIRS}
-    ${GTK4_INCLUDE_DIRS}
-    ${ADW_INCLUDE_DIRS}
+    ${GLIB_INCLUDE_DIRS}
 )
 
-target_link_libraries(Aura-U PRIVATE
+target_link_libraries(daura-u PRIVATE
     ${LIBUSB_LIBRARIES}
     ${LIBEVDEV_LIBRARIES}
+    ${GLIB_LIBRARIES}
+)
+
+target_compile_options(daura-u PRIVATE
+    ${LIBUSB_CFLAGS_OTHER}
+    ${GLIB_CFLAGS_OTHER}
+)
+
+# App Executable
+set(APP_SOURCES
+    src/app/main.cpp
+    src/app/DBusClient.cpp
+    src/app/MainWindow.cpp
+)
+
+add_executable(aura-u ${APP_SOURCES})
+
+target_compile_definitions(aura-u PRIVATE INSTALL_PREFIX="/usr")
+
+target_include_directories(aura-u PRIVATE
+    include
+    ${GTK4_INCLUDE_DIRS}
+    ${ADW_INCLUDE_DIRS}
+    ${GLIB_INCLUDE_DIRS}
+)
+
+target_link_libraries(aura-u PRIVATE
     ${GTK4_LIBRARIES}
     ${ADW_LIBRARIES}
+    ${GLIB_LIBRARIES}
 )
 
-target_compile_options(Aura-U PRIVATE
-    ${LIBUSB_CFLAGS_OTHER}
+target_compile_options(aura-u PRIVATE
     ${GTK4_CFLAGS_OTHER}
     ${ADW_CFLAGS_OTHER}
+    ${GLIB_CFLAGS_OTHER}
 )
 
-install(TARGETS Aura-U DESTINATION bin)
+# Installation
+install(TARGETS daura-u DESTINATION bin)
+install(TARGETS aura-u DESTINATION bin)
+install(FILES dbus/aura-u.xml DESTINATION share/dbus-1/interfaces/)
+install(DIRECTORY DESTINATION /var/lib/aura-u)
+install(FILES assets/rog_logo.png DESTINATION share/icons/hicolor/256x256/apps/)
+install(FILES aura-u.desktop DESTINATION share/applications/)
+install(FILES dbus/io.AuraU.conf DESTINATION /etc/dbus-1/system.d/)
+install(CODE "execute_process(COMMAND gtk-update-icon-cache /usr/share/icons/hicolor/)")

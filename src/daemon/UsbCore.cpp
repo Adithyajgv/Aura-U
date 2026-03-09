@@ -59,23 +59,17 @@ bool UsbCore::connect() {
     m_interfaceNum = cfg->interface[0].altsetting[0].bInterfaceNumber;
     libusb_free_config_descriptor(cfg);
 
-    r = libusb_claim_interface(m_handle, m_interfaceNum);
-    if (r < 0) {
-        m_lastError = std::string("Cannot claim interface: ") + libusb_error_name(r);
-        libusb_close(m_handle);
-        m_handle = nullptr;
-        return false;
-    }
-
     m_connected = true;
-    sendPacket(AuraCtrl::initKeyboard(), false);
+    fprintf(stdout, "Sending init packet...\n");
+    //sendPacket(AuraCtrl::initKeyboard(), false);
+    fprintf(stdout, "Init done\n");
     return true;
 }
 
 void UsbCore::disconnect() {
     std::lock_guard lock(m_mutex);
     if (m_handle) {
-        libusb_release_interface(m_handle, m_interfaceNum);
+        //libusb_release_interface(m_handle, m_interfaceNum);
         libusb_close(m_handle);
         m_handle = nullptr;
     }
@@ -87,16 +81,22 @@ bool UsbCore::isConnected() const {
 }
 
 bool UsbCore::controlTransfer(const Packet& packet) {
+    
+    libusb_claim_interface(m_handle, m_interfaceNum);
+    fprintf(stdout, "TX: ");
+    for (int i = 0; i < MSG_LEN; ++i) fprintf(stdout, "%02x ", packet[i]);
+    fprintf(stdout, "\n");
     int r = libusb_control_transfer(
         m_handle,
-        0x21,    // host→device, class, interface
-        9,       // HID SET_REPORT
-        0x035d,  // report type + report ID
+        0x21,
+        9,
+        0x035d,  // hardcoded like rogauracore
         0,
         const_cast<uint8_t*>(packet.data()),
         MSG_LEN,
-        0
+        0        // no timeout like rogauracore
     );
+    libusb_release_interface(m_handle, m_interfaceNum);
     if (r < 0) {
         m_lastError = std::string("Transfer failed: ") + libusb_error_name(r);
         return false;

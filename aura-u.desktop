@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Aura-U
+Comment=ROG RGB Keyboard Control
+Exec=aura-u
+Icon=rog_logo
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+Keywords=RGB;keyboard;ASUS;ROG;Aura;lighting;
+StartupNotify=true
