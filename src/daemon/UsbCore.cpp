@@ -86,13 +86,7 @@ bool UsbCore::isConnected() const {
 }
 
 bool UsbCore::controlTransfer(const Packet& packet) {
-    // hidraw write requires a leading report ID byte (0x00 for report ID 0)
-    uint8_t buf[MSG_LEN + 1] = {};
-    buf[0] = 0x00;  // report ID
-    memcpy(buf + 1, packet.data(), MSG_LEN);
-
-    ssize_t r = write(m_fd, buf, sizeof(buf));
-    fprintf(stdout, "hidraw write: packet[0]=%02x result=%zd\n", packet[0], r);
+    ssize_t r = write(m_fd, packet.data(), MSG_LEN);
     if (r < 0) {
         m_lastError = std::string("hidraw write failed: ") + strerror(errno);
         return false;
