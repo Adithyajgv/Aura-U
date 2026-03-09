@@ -89,9 +89,9 @@ GtkWidget* MainWindow::buildAuraPage() {
     adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(speedGroup), "Animation");
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(speedGroup));
 
-    m_speedScale = GTK_SCALE(gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 255, 1));
+    m_speedScale = GTK_SCALE(gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 1, 3, 1));
     gtk_scale_set_draw_value(m_speedScale, TRUE);
-    gtk_range_set_value(GTK_RANGE(m_speedScale), 0xeb);
+    gtk_range_set_value(GTK_RANGE(m_speedScale), 0);
     gtk_widget_set_size_request(GTK_WIDGET(m_speedScale), 200, -1);
     gtk_widget_set_valign(GTK_WIDGET(m_speedScale), GTK_ALIGN_CENTER);
 
@@ -177,7 +177,8 @@ void MainWindow::onBreatheColorSet(GtkColorDialogButton*, GParamSpec*, gpointer 
 void MainWindow::applyCurrentSettings() {
     if (!m_zoneButtons[0] || !m_breatheColor) return;
     uint32_t mode  = gtk_drop_down_get_selected(m_modeDD);
-    uint8_t  speed = (uint8_t)gtk_range_get_value(GTK_RANGE(m_speedScale));
+    uint8_t  speed = 215 + 10*(uint8_t)gtk_range_get_value(GTK_RANGE(m_speedScale));
+    printf("Applying settings: mode=%u, speed=%u\n", mode, 215 + 10*speed);
 
     switch (mode) {
         case 0:

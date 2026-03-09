@@ -41,7 +41,6 @@ Packet AuraCtrl::multiStatic(std::array<Color, 4> colors, uint8_t zone) {
     p[4] = colors[zone].r;
     p[5] = colors[zone].g;
     p[6] = colors[zone].b;
-    p[7] = 0xeb;
     return p;
 }
 
