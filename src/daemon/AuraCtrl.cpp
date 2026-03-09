@@ -75,6 +75,19 @@ Packet AuraCtrl::applyPacket() {
     return p;
 }
 
+Packet AuraCtrl::powerPacket(bool lightbar) {
+    Packet p{};
+    p[0] = 0x5d;
+    p[1] = 0xbd;
+    p[2] = 0x01;
+    p[3] = 0xff;
+    p[4] = lightbar ? 0x07 : 0x00; // lightbar on/off
+    p[5] = 0xff;
+    p[6] = 0xff;
+    p[7] = 0xff;
+    return p;
+}
+
 Packet AuraCtrl::initKeyboard() {
     Packet p{};
     const uint8_t init[] = {

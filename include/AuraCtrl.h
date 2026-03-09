@@ -25,5 +25,6 @@ public:
     static Packet brightness(uint8_t level);
     static Packet setPacket();
     static Packet applyPacket();
+    static Packet powerPacket(bool lightbar = true);
     static Packet initKeyboard();
 };

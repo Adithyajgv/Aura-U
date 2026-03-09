@@ -16,18 +16,24 @@ MainWindow::MainWindow(AdwApplication* app, DBusClient& client)
         syncBrightness(level);
     };
 
-    uint8_t mode, brightness, speed;
+    uint8_t mode, brightness, speed, lightbarMode;
     std::array<Color, 4> zones;
-    if (m_client.getState(mode, brightness, speed, zones)) {
+    if (m_client.getState(mode, brightness, speed, zones, lightbarMode)) {
         syncMode(mode);
         syncBrightness(brightness);
+        g_signal_handlers_block_by_func(m_lightbarDD, (gpointer)onLightbarModeChanged, this);
+        gtk_drop_down_set_selected(m_lightbarDD, lightbarMode);
+        g_signal_handlers_unblock_by_func(m_lightbarDD, (gpointer)onLightbarModeChanged, this);
         g_signal_handlers_block_by_func(m_speedScale, (gpointer)onSpeedChanged, this);
-        gtk_range_set_value(GTK_RANGE(m_speedScale), speed);
+        uint8_t speedStep = (speed <= 225) ? 1 : (speed <= 235) ? 2 : 3;
+        gtk_range_set_value(GTK_RANGE(m_speedScale), speedStep);
         g_signal_handlers_unblock_by_func(m_speedScale, (gpointer)onSpeedChanged, this);
         for (int i = 0; i < 4; ++i) {
-            GdkRGBA rgba = { (float)(zones[i].r/255.0), (float)(zones[i].g/255.0), (float)(zones[i].b/255.0), 1.0f };
+            GdkRGBA rgba = { zones[i].r/255.0f, zones[i].g/255.0f, zones[i].b/255.0f, 1.0f };
             gtk_color_dialog_button_set_rgba(m_zoneButtons[i], &rgba);
         }
+    } else {
+        fprintf(stderr, "Failed to load state from file\n");
     }
 }
 
@@ -69,6 +75,7 @@ void MainWindow::buildWindow(AdwApplication* app) {
 GtkWidget* MainWindow::buildAuraPage() {
     auto* page = adw_preferences_page_new();
 
+    //Mode ctrl
     auto* modeGroup = adw_preferences_group_new();
     adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(modeGroup), "Mode");
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(modeGroup));
@@ -84,6 +91,7 @@ GtkWidget* MainWindow::buildAuraPage() {
 
     g_signal_connect(m_modeDD, "notify::selected", G_CALLBACK(onModeChanged), this);
 
+    //Brightnes ctrl
     auto* brightGroup = adw_preferences_group_new();
     adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(brightGroup), "Brightness");
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(brightGroup));
@@ -100,6 +108,25 @@ GtkWidget* MainWindow::buildAuraPage() {
 
     g_signal_connect(m_brightnessScale, "value-changed", G_CALLBACK(onBrightnessChanged), this);
 
+    auto* lightbarGroup = adw_preferences_group_new();
+    adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(lightbarGroup), "Lightbar");
+    adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(lightbarGroup));
+
+    const char* lightbarLabels[] = { "Never", "AC Only", "Always", nullptr };
+    auto* lightbarList = gtk_string_list_new(lightbarLabels);
+    m_lightbarDD = GTK_DROP_DOWN(gtk_drop_down_new(G_LIST_MODEL(lightbarList), nullptr));
+    gtk_widget_set_valign(GTK_WIDGET(m_lightbarDD), GTK_ALIGN_CENTER);
+    gtk_drop_down_set_selected(m_lightbarDD, 1); // default AC only
+
+    auto* lightbarRow = adw_action_row_new();
+    adw_preferences_row_set_title(ADW_PREFERENCES_ROW(lightbarRow), "Mode");
+    adw_action_row_add_suffix(ADW_ACTION_ROW(lightbarRow), GTK_WIDGET(m_lightbarDD));
+    adw_preferences_group_add(ADW_PREFERENCES_GROUP(lightbarGroup), lightbarRow);
+
+    g_signal_connect(m_lightbarDD, "notify::selected", G_CALLBACK(onLightbarModeChanged), this);
+
+
+    // Speed ctrl
     auto* speedGroup = adw_preferences_group_new();
     adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(speedGroup), "Animation");
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(speedGroup));
@@ -117,6 +144,8 @@ GtkWidget* MainWindow::buildAuraPage() {
 
     g_signal_connect(m_speedScale, "value-changed", G_CALLBACK(onSpeedChanged), this);
 
+
+    // Zone color ctrl
     m_zoneColorGroup = adw_preferences_group_new();
     adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(m_zoneColorGroup), "Zone Colors");
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(m_zoneColorGroup));
@@ -136,6 +165,7 @@ GtkWidget* MainWindow::buildAuraPage() {
         g_signal_connect(m_zoneButtons[i], "notify::rgba", G_CALLBACK(onZoneColorSet), this);
     }
 
+    // Breathe color ctrl
     auto* breatheGroup = adw_preferences_group_new();
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(breatheGroup));
 
@@ -181,6 +211,11 @@ void MainWindow::onBrightnessChanged(GtkRange* range, gpointer self) {
     w->m_client.setBrightness((uint8_t)gtk_range_get_value(range));
 }
 
+void MainWindow::onLightbarModeChanged(GtkDropDown* dd, GParamSpec*, gpointer self) {
+    auto* w = static_cast<MainWindow*>(self);
+    w->m_client.setLightbarMode((uint8_t)gtk_drop_down_get_selected(dd));
+}
+
 static guint s_colorTimer = 0;
 void MainWindow::onZoneColorSet(GtkColorDialogButton*, GParamSpec*, gpointer self) {
     if (s_colorTimer) g_source_remove(s_colorTimer);
@@ -204,7 +239,6 @@ void MainWindow::applyCurrentSettings() {
     if (!m_zoneButtons[0] || !m_breatheColor) return;
     uint32_t mode  = gtk_drop_down_get_selected(m_modeDD);
     uint8_t  speed = 215 + 10*(uint8_t)gtk_range_get_value(GTK_RANGE(m_speedScale));
-    printf("Applying settings: mode=%u, speed=%u\n", mode, 215 + 10*speed);
 
     switch (mode) {
         case 0:

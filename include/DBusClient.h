@@ -18,9 +18,9 @@ public:
     void setColorCycle(uint8_t speed);
     void setRainbow(uint8_t speed);
     void setBrightness(uint8_t level);
+    void setLightbarMode(uint8_t mode);
     void cycleMode();
-    bool getState(uint8_t& mode, uint8_t& brightness, uint8_t& speed,
-              std::array<Color, 4>& zones);
+    bool getState(uint8_t& mode, uint8_t& brightness, uint8_t& speed, std::array<Color, 4>& zones, uint8_t& lightbarMode);
     
 
     // Signals from daemon → fired when hardware state changes

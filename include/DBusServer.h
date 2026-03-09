@@ -14,6 +14,7 @@ public:
     std::function<void(uint8_t)> onSetRainbow;
     std::function<void(uint8_t)> onSetBrightness;
     std::function<void()> onCycleMode;
+    std::function<void(uint8_t)> onSetLightbarMode;
 
     bool start();
     void stop();

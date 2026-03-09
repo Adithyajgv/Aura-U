@@ -17,6 +17,8 @@ static InputListener input;
 static AuraMode  currentMode       = AuraMode::Static;
 static uint8_t   currentBrightness = 2;
 static uint8_t   currentSpeed      = 0xeb;
+static uint8_t lightbarMode = 1; // 0=never, 1=AC only, 2=always
+
 static std::array<Color, 4> zoneColors = {{
     {0xff, 0x00, 0x00},
     {0x00, 0xff, 0x00},
@@ -37,6 +39,8 @@ static void saveState() {
     j["mode"]       = static_cast<int>(currentMode);
     j["brightness"] = currentBrightness;
     j["speed"]      = currentSpeed;
+    j["lightbar_mode"] = lightbarMode;
+
     for (int i = 0; i < 4; ++i) {
         j["zones"][i] = {
             {"r", zoneColors[i].r},
@@ -44,6 +48,7 @@ static void saveState() {
             {"b", zoneColors[i].b}
         };
     }
+
     std::ofstream f(STATE_PATH);
     if (f) f << j.dump(2);
     else fprintf(stderr, "Failed to save state to %s\n", STATE_PATH);
@@ -60,6 +65,7 @@ static void loadState() {
         currentMode       = static_cast<AuraMode>(j.value("mode", 0));
         currentBrightness = j.value("brightness", 2);
         currentSpeed      = j.value("speed", 0xeb);
+        lightbarMode = j.value("lightbar_mode", 1);
         for (int i = 0; i < 4; ++i) {
             zoneColors[i].r = j["zones"][i].value("r", 255);
             zoneColors[i].g = j["zones"][i].value("g", 0);
@@ -109,6 +115,37 @@ static void setBrightness(uint8_t level) {
     fprintf(stdout, "Brightness set to %d\n", currentBrightness);
 }
 
+static bool isOnAC() {
+    FILE* f = fopen("/sys/class/power_supply/ADP0/online", "r");
+    if (!f) return true;
+    int val = 0;
+    fscanf(f, "%d", &val);
+    fclose(f);
+    return val == 1;
+}
+
+static bool lastAC = false;
+
+static bool lightbarEnabled() {
+    switch (lightbarMode) {
+        case 0: return false;
+        case 2: return true;
+        default: return isOnAC(); // AC only
+    }
+}
+
+static gboolean checkPowerStatus(gpointer) {
+    bool ac = isOnAC();
+    if (ac != lastAC) {
+        lastAC = ac;
+        // Always re-apply our setting when AC state changes
+        usb.sendPacket(AuraCtrl::powerPacket(lightbarEnabled()), false);
+        fprintf(stdout, "Power status changed: %s\n", ac ? "AC" : "battery");
+    }
+    return G_SOURCE_CONTINUE;
+}
+
+
 int main() {
     fprintf(stdout, "Aura-U daemon starting\n");
 
@@ -123,6 +160,7 @@ int main() {
     loadState();
     applyCurrentMode();
     usb.sendPacket(AuraCtrl::brightness(currentBrightness), false);
+    usb.sendPacket(AuraCtrl::powerPacket(lightbarEnabled()), false);
 
     // Wire input listener
     input.onBrightnessDown = []() {
@@ -165,6 +203,15 @@ int main() {
     dbus.onSetBrightness = [](uint8_t level) {
         setBrightness(level);
     };
+
+    dbus.onSetLightbarMode = [](uint8_t mode) {
+        lightbarMode = mode;
+        bool enabled = lightbarEnabled();
+        fprintf(stdout, "Lightbar mode set to %d, enabled=%d\n", mode, enabled);
+        usb.sendPacket(AuraCtrl::powerPacket(enabled), false);
+        saveState();
+    };
+
     dbus.onCycleMode = []() {
         cycleMode();
     };
@@ -181,6 +228,8 @@ int main() {
     GMainLoop* loop = g_main_loop_new(nullptr, FALSE);
     g_loop = loop;
     fprintf(stdout, "Aura-U daemon running\n");
+    lastAC = isOnAC();
+    g_timeout_add_seconds(5, checkPowerStatus, nullptr);
     g_main_loop_run(loop);
     g_main_loop_unref(loop);
 

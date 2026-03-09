@@ -16,6 +16,7 @@ private:
     static void onModeChanged(GtkDropDown* dd, GParamSpec*, gpointer self);
     static void onSpeedChanged(GtkRange* range, gpointer self);
     static void onBrightnessChanged(GtkRange* range, gpointer self);
+    static void onLightbarModeChanged(GtkDropDown* dd, GParamSpec*, gpointer self);
     static void onZoneColorSet(GtkColorDialogButton* btn, GParamSpec*, gpointer self);
     static void onBreatheColorSet(GtkColorDialogButton* btn, GParamSpec*, gpointer self);
 
@@ -33,4 +34,5 @@ private:
     GtkWidget*            m_speedRow        = nullptr;
     GtkWidget*            m_zoneColorGroup  = nullptr;
     GtkWidget*            m_breatheColorRow = nullptr;
+    GtkDropDown*          m_lightbarDD      = nullptr;
 };

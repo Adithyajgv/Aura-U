@@ -2,43 +2,7 @@
 #include <cstdio>
 #include <cstring>
 
-const char* DBusServer::INTROSPECTION_XML = R"(
-<!DOCTYPE node PUBLIC
-  "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
-  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
-<node>
-  <interface name="io.AuraU">
-    <method name="SetStaticColor">
-      <arg name="r"    type="y" direction="in"/>
-      <arg name="g"    type="y" direction="in"/>
-      <arg name="b"    type="y" direction="in"/>
-      <arg name="zone" type="y" direction="in"/>
-    </method>
-    <method name="SetBreathe">
-      <arg name="r"     type="y" direction="in"/>
-      <arg name="g"     type="y" direction="in"/>
-      <arg name="b"     type="y" direction="in"/>
-      <arg name="speed" type="y" direction="in"/>
-    </method>
-    <method name="SetColorCycle">
-      <arg name="speed" type="y" direction="in"/>
-    </method>
-    <method name="SetRainbow">
-      <arg name="speed" type="y" direction="in"/>
-    </method>
-    <method name="SetBrightness">
-      <arg name="level" type="y" direction="in"/>
-    </method>
-    <method name="CycleMode"/>
-    <signal name="ModeChanged">
-      <arg name="mode" type="y"/>
-    </signal>
-    <signal name="BrightnessChanged">
-      <arg name="level" type="y"/>
-    </signal>
-  </interface>
-</node>
-)";
+
 
 static const GDBusInterfaceVTable INTERFACE_VTABLE = {
     DBusServer::handleMethodCall,
@@ -54,7 +18,16 @@ DBusServer::~DBusServer() {
 
 bool DBusServer::start() {
     GError* err = nullptr;
-    m_nodeInfo = g_dbus_node_info_new_for_xml(INTROSPECTION_XML, &err);
+    
+    gchar* xml = nullptr;
+    if (!g_file_get_contents("/usr/local/share/dbus-1/interfaces/aura-u.xml", &xml, nullptr, &err)) {
+        fprintf(stderr, "DBusServer: failed to read XML: %s\n", err->message);
+        g_error_free(err);
+        return false;
+    }
+    
+    m_nodeInfo = g_dbus_node_info_new_for_xml(xml, &err);
+    g_free(xml);
     if (!m_nodeInfo) {
         fprintf(stderr, "DBusServer: failed to parse XML: %s\n", err->message);
         g_error_free(err);
@@ -156,6 +129,9 @@ void DBusServer::handleMethodCall(
 
     } else if (strcmp(methodName, "CycleMode") == 0) {
         if (s->onCycleMode) s->onCycleMode();
+    } else if (strcmp(methodName, "SetLightbarMode") == 0) {
+        g_variant_get(params, "(y)", &a);
+        if (s->onSetLightbarMode) s->onSetLightbarMode(a);
     }
 
     g_dbus_method_invocation_return_value(invocation, nullptr);

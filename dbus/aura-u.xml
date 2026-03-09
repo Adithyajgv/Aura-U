@@ -3,45 +3,36 @@
   "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <node>
   <interface name="io.AuraU">
-
     <method name="SetStaticColor">
-      <arg name="r" type="y" direction="in"/>
-      <arg name="g" type="y" direction="in"/>
-      <arg name="b" type="y" direction="in"/>
+      <arg name="r"    type="y" direction="in"/>
+      <arg name="g"    type="y" direction="in"/>
+      <arg name="b"    type="y" direction="in"/>
       <arg name="zone" type="y" direction="in"/>
     </method>
-
     <method name="SetBreathe">
-      <arg name="r" type="y" direction="in"/>
-      <arg name="g" type="y" direction="in"/>
-      <arg name="b" type="y" direction="in"/>
+      <arg name="r"     type="y" direction="in"/>
+      <arg name="g"     type="y" direction="in"/>
+      <arg name="b"     type="y" direction="in"/>
       <arg name="speed" type="y" direction="in"/>
     </method>
-
     <method name="SetColorCycle">
       <arg name="speed" type="y" direction="in"/>
     </method>
-
     <method name="SetRainbow">
       <arg name="speed" type="y" direction="in"/>
     </method>
-
     <method name="SetBrightness">
       <arg name="level" type="y" direction="in"/>
     </method>
-
+    <method name="SetLightbarMode">
+      <arg name="mode" type="y" direction="in"/>
+    </method>
     <method name="CycleMode"/>
-    <!-- Daemon fires this when F4 is pressed so GUI can sync -->
     <signal name="ModeChanged">
       <arg name="mode" type="y"/>
     </signal>
-
-    <!-- Daemon fires this when F2/F3 pressed so GUI can sync -->
     <signal name="BrightnessChanged">
       <arg name="level" type="y"/>
     </signal>
-
-
-
   </interface>
 </node>
