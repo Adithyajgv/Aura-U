@@ -1,77 +1,82 @@
 #include "UsbCore.h"
+#include <cstdio>
+#include <fcntl.h>
+#include <unistd.h>
+#include <libudev.h>
+#include <cstring>
 
-UsbCore::UsbCore() {
-    libusb_init(&m_ctx);
-}
+UsbCore::UsbCore() = default;
 
 UsbCore::~UsbCore() {
     disconnect();
-    if (m_ctx) libusb_exit(m_ctx);
+}
+
+std::string UsbCore::findHidraw() {
+    udev* ud = udev_new();
+    if (!ud) return {};
+
+    udev_enumerate* en = udev_enumerate_new(ud);
+    udev_enumerate_add_match_subsystem(en, "hidraw");
+    udev_enumerate_scan_devices(en);
+
+    udev_list_entry* devices = udev_enumerate_get_list_entry(en);
+    udev_list_entry* entry;
+    std::string result;
+
+    udev_list_entry_foreach(entry, devices) {
+        const char* path = udev_list_entry_get_name(entry);
+        udev_device* dev = udev_device_new_from_syspath(ud, path);
+
+        // Walk up to USB parent to get vendor/product
+        udev_device* usbDev = udev_device_get_parent_with_subsystem_devtype(
+            dev, "usb", "usb_device");
+
+        if (usbDev) {
+            const char* vid = udev_device_get_sysattr_value(usbDev, "idVendor");
+            const char* pid = udev_device_get_sysattr_value(usbDev, "idProduct");
+
+            if (vid && pid &&
+                strtol(vid, nullptr, 16) == ASUS_VENDOR_ID &&
+                strtol(pid, nullptr, 16) == ASUS_PRODUCT_ID) {
+                const char* node = udev_device_get_devnode(dev);
+                if (node) result = node;
+                udev_device_unref(dev);
+                break;
+            }
+        }
+        udev_device_unref(dev);
+    }
+
+    udev_enumerate_unref(en);
+    udev_unref(ud);
+    return result;
 }
 
 bool UsbCore::connect() {
     std::lock_guard lock(m_mutex);
 
-    libusb_device** list = nullptr;
-    int n = libusb_get_device_list(m_ctx, &list);
-    if (n < 0) {
-        m_lastError = "Failed to get USB device list";
+    std::string node = findHidraw();
+    if (node.empty()) {
+        m_lastError = "No ROG keyboard hidraw device found";
         return false;
     }
+    fprintf(stdout, "Using hidraw device: %s\n", node.c_str());
 
-    libusb_device* found = nullptr;
-    for (int i = 0; i < n; ++i) {
-        libusb_device_descriptor desc{};
-        libusb_get_device_descriptor(list[i], &desc);
-        if (desc.idVendor != ASUS_VENDOR_ID) continue;
-        for (auto pid : ASUS_PRODUCT_IDS) {
-            if (desc.idProduct == pid) {
-                found = list[i];
-                break;
-            }
-        }
-        if (found) break;
-    }
-
-    if (!found) {
-        libusb_free_device_list(list, 1);
-        m_lastError = "No ROG keyboard found";
+    m_fd = open(node.c_str(), O_RDWR | O_NONBLOCK);
+    if (m_fd < 0) {
+        m_lastError = std::string("Cannot open ") + node + ": " + strerror(errno);
         return false;
     }
-
-    int r = libusb_open(found, &m_handle);
-    libusb_free_device_list(list, 1);
-    if (r < 0) {
-        m_lastError = std::string("Cannot open device: ") + libusb_error_name(r);
-        return false;
-    }
-
-    libusb_set_auto_detach_kernel_driver(m_handle, 1);
-
-    libusb_config_descriptor* cfg = nullptr;
-    libusb_get_active_config_descriptor(found, &cfg);
-    if (!cfg || cfg->bNumInterfaces == 0) {
-        m_lastError = "No interfaces on device";
-        libusb_close(m_handle);
-        m_handle = nullptr;
-        return false;
-    }
-    m_interfaceNum = cfg->interface[0].altsetting[0].bInterfaceNumber;
-    libusb_free_config_descriptor(cfg);
 
     m_connected = true;
-    fprintf(stdout, "Sending init packet...\n");
-    //sendPacket(AuraCtrl::initKeyboard(), false);
-    fprintf(stdout, "Init done\n");
     return true;
 }
 
 void UsbCore::disconnect() {
     std::lock_guard lock(m_mutex);
-    if (m_handle) {
-        //libusb_release_interface(m_handle, m_interfaceNum);
-        libusb_close(m_handle);
-        m_handle = nullptr;
+    if (m_fd >= 0) {
+        close(m_fd);
+        m_fd = -1;
     }
     m_connected = false;
 }
@@ -81,24 +86,15 @@ bool UsbCore::isConnected() const {
 }
 
 bool UsbCore::controlTransfer(const Packet& packet) {
-    
-    libusb_claim_interface(m_handle, m_interfaceNum);
-    fprintf(stdout, "TX: ");
-    for (int i = 0; i < MSG_LEN; ++i) fprintf(stdout, "%02x ", packet[i]);
-    fprintf(stdout, "\n");
-    int r = libusb_control_transfer(
-        m_handle,
-        0x21,
-        9,
-        0x035d,  // hardcoded like rogauracore
-        0,
-        const_cast<uint8_t*>(packet.data()),
-        MSG_LEN,
-        0        // no timeout like rogauracore
-    );
-    libusb_release_interface(m_handle, m_interfaceNum);
+    // hidraw write requires a leading report ID byte (0x00 for report ID 0)
+    uint8_t buf[MSG_LEN + 1] = {};
+    buf[0] = 0x00;  // report ID
+    memcpy(buf + 1, packet.data(), MSG_LEN);
+
+    ssize_t r = write(m_fd, buf, sizeof(buf));
+    fprintf(stdout, "hidraw write: packet[0]=%02x result=%zd\n", packet[0], r);
     if (r < 0) {
-        m_lastError = std::string("Transfer failed: ") + libusb_error_name(r);
+        m_lastError = std::string("hidraw write failed: ") + strerror(errno);
         return false;
     }
     return true;

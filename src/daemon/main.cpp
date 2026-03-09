@@ -86,10 +86,7 @@ static void applyCurrentMode() {
             usb.sendPacket(AuraCtrl::colorCycle(currentSpeed), true);
             break;
         case AuraMode::Rainbow:
-            for (uint8_t i = 0; i < 4; ++i)
-                usb.sendPacket(AuraCtrl::multiStatic(zoneColors, i), false);
-            usb.sendPacket(AuraCtrl::setPacket(), false);
-            usb.sendPacket(AuraCtrl::applyPacket(), false);
+            usb.sendPacket(AuraCtrl::rainbow(currentSpeed), true);
             break;
         default: break;
     }

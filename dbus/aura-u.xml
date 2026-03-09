@@ -31,7 +31,6 @@
     </method>
 
     <method name="CycleMode"/>
-
     <!-- Daemon fires this when F4 is pressed so GUI can sync -->
     <signal name="ModeChanged">
       <arg name="mode" type="y"/>
@@ -41,6 +40,8 @@
     <signal name="BrightnessChanged">
       <arg name="level" type="y"/>
     </signal>
+
+
 
   </interface>
 </node>

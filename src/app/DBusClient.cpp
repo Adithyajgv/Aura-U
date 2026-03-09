@@ -1,4 +1,6 @@
 #include "DBusClient.h"
+#include "json.hpp"
+#include <fstream>
 #include <cstdio>
 #include <cstring>
 
@@ -90,6 +92,26 @@ void DBusClient::cycleMode() {
     g_dbus_proxy_call(m_proxy, "CycleMode",
         nullptr,
         G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+}
+
+bool DBusClient::getState(uint8_t& mode, uint8_t& brightness, uint8_t& speed,
+                          std::array<Color, 4>& zones) {
+    std::ifstream f("/var/lib/aura-u/state.json");
+    if (!f) return false;
+    try {
+        nlohmann::json j = nlohmann::json::parse(f);
+        mode       = j.value("mode", 0);
+        brightness = j.value("brightness", 2);
+        speed      = j.value("speed", 0xeb);
+        for (int i = 0; i < 4; ++i) {
+            zones[i].r = j["zones"][i].value("r", 255);
+            zones[i].g = j["zones"][i].value("g", 0);
+            zones[i].b = j["zones"][i].value("b", 0);
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 

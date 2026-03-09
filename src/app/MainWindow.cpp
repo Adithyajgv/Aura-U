@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "AuraCtrl.h"
 #include <cstdio>
 
 static const char* MODE_LABELS[] = { "Static", "Breathe", "Color Cycle", "Rainbow", nullptr };
@@ -14,6 +15,20 @@ MainWindow::MainWindow(AdwApplication* app, DBusClient& client)
     m_client.onBrightnessChanged = [this](uint8_t level) {
         syncBrightness(level);
     };
+
+    uint8_t mode, brightness, speed;
+    std::array<Color, 4> zones;
+    if (m_client.getState(mode, brightness, speed, zones)) {
+        syncMode(mode);
+        syncBrightness(brightness);
+        g_signal_handlers_block_by_func(m_speedScale, (gpointer)onSpeedChanged, this);
+        gtk_range_set_value(GTK_RANGE(m_speedScale), speed);
+        g_signal_handlers_unblock_by_func(m_speedScale, (gpointer)onSpeedChanged, this);
+        for (int i = 0; i < 4; ++i) {
+            GdkRGBA rgba = { (float)(zones[i].r/255.0), (float)(zones[i].g/255.0), (float)(zones[i].b/255.0), 1.0f };
+            gtk_color_dialog_button_set_rgba(m_zoneButtons[i], &rgba);
+        }
+    }
 }
 
 void MainWindow::buildWindow(AdwApplication* app) {
@@ -26,7 +41,7 @@ void MainWindow::buildWindow(AdwApplication* app) {
 
     auto* header = adw_header_bar_new();
 
-    auto* logo = gtk_image_new_from_file("/mnt/data/gits/Aura-U/assets/rog_logo.png");
+    auto* logo = gtk_image_new_from_file("share/icons/hicolor/256x256/apps/rog_logo.png");
     gtk_image_set_pixel_size(GTK_IMAGE(logo), 28);
     adw_header_bar_pack_start(ADW_HEADER_BAR(header), logo);
 
@@ -166,12 +181,23 @@ void MainWindow::onBrightnessChanged(GtkRange* range, gpointer self) {
     w->m_client.setBrightness((uint8_t)gtk_range_get_value(range));
 }
 
+static guint s_colorTimer = 0;
 void MainWindow::onZoneColorSet(GtkColorDialogButton*, GParamSpec*, gpointer self) {
-    static_cast<MainWindow*>(self)->applyCurrentSettings();
+    if (s_colorTimer) g_source_remove(s_colorTimer);
+    s_colorTimer = g_timeout_add(300, [](gpointer data) -> gboolean {
+        s_colorTimer = 0;
+        static_cast<MainWindow*>(data)->applyCurrentSettings();
+        return G_SOURCE_REMOVE;
+    }, self);
 }
 
 void MainWindow::onBreatheColorSet(GtkColorDialogButton*, GParamSpec*, gpointer self) {
-    static_cast<MainWindow*>(self)->applyCurrentSettings();
+    if (s_colorTimer) g_source_remove(s_colorTimer);
+    s_colorTimer = g_timeout_add(300, [](gpointer data) -> gboolean {
+        s_colorTimer = 0;
+        static_cast<MainWindow*>(data)->applyCurrentSettings();
+        return G_SOURCE_REMOVE;
+    }, self);
 }
 
 void MainWindow::applyCurrentSettings() {

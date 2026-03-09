@@ -44,6 +44,13 @@ Packet AuraCtrl::multiStatic(std::array<Color, 4> colors, uint8_t zone) {
     return p;
 }
 
+Packet AuraCtrl::rainbow(uint8_t speed) {
+    auto p = base();
+    p[3] = 3;
+    p[7] = speed;
+    return p;
+}
+
 Packet AuraCtrl::brightness(uint8_t level) {
     Packet p{};
     p[0] = 0x5a;

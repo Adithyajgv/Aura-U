@@ -10,10 +10,10 @@ public:
 
     std::function<void(uint8_t, uint8_t, uint8_t, uint8_t)> onSetStaticColor;
     std::function<void(uint8_t, uint8_t, uint8_t, uint8_t)> onSetBreathe;
-    std::function<void(uint8_t)>                             onSetColorCycle;
-    std::function<void(uint8_t)>                             onSetRainbow;
-    std::function<void(uint8_t)>                             onSetBrightness;
-    std::function<void()>                                    onCycleMode;
+    std::function<void(uint8_t)> onSetColorCycle;
+    std::function<void(uint8_t)> onSetRainbow;
+    std::function<void(uint8_t)> onSetBrightness;
+    std::function<void()> onCycleMode;
 
     bool start();
     void stop();
