@@ -42,6 +42,7 @@ target_compile_options(daura-u PRIVATE
 set(APP_SOURCES
     src/app/main.cpp
     src/app/DBusClient.cpp
+    src/app/AuraPage.cpp
     src/app/MainWindow.cpp
 )
 add_executable(aura-u ${APP_SOURCES})
