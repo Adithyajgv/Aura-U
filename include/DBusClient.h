@@ -1,5 +1,6 @@
 #pragma once
 #include "AuraCtrl.h"
+#include "ProfileState.h"
 #include <gio/gio.h>
 #include <functional>
 #include <cstdint>
@@ -19,13 +20,17 @@ public:
     void setRainbow(uint8_t speed);
     void setBrightness(uint8_t level);
     void setLightbarMode(uint8_t mode);
+    void setCurrentProfile(uint8_t profile);
+    void setFanCurve(uint8_t profile, const FanCurve& curve);
     void cycleMode();
     bool getState(uint8_t& mode, uint8_t& brightness, uint8_t& speed, std::array<Color, 4>& zones, uint8_t& lightbarMode);
+    bool getProfileState(uint8_t& currentProfile, std::array<FanCurve, PROFILE_COUNT>& curves);
     
 
     // Signals from daemon → fired when hardware state changes
     std::function<void(uint8_t)> onModeChanged;
     std::function<void(uint8_t)> onBrightnessChanged;
+    std::function<void(uint8_t)> onCurrentProfileChanged;
 
 private:
     static void onSignal(

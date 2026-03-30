@@ -27,12 +27,23 @@
     <method name="SetLightbarMode">
       <arg name="mode" type="y" direction="in"/>
     </method>
+    <method name="SetCurrentProfile">
+      <arg name="profile" type="y" direction="in"/>
+    </method>
+    <method name="SetFanCurve">
+      <arg name="profile" type="y" direction="in"/>
+      <arg name="cpu" type="ay" direction="in"/>
+      <arg name="gpu" type="ay" direction="in"/>
+    </method>
     <method name="CycleMode"/>
     <signal name="ModeChanged">
       <arg name="mode" type="y"/>
     </signal>
     <signal name="BrightnessChanged">
       <arg name="level" type="y"/>
+    </signal>
+    <signal name="CurrentProfileChanged">
+      <arg name="profile" type="y"/>
     </signal>
   </interface>
 </node>

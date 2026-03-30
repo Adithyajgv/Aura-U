@@ -1,6 +1,7 @@
 #include "DBusServer.h"
 #include <cstdio>
 #include <cstring>
+#include <array>
 
 
 
@@ -132,6 +133,32 @@ void DBusServer::handleMethodCall(
     } else if (strcmp(methodName, "SetLightbarMode") == 0) {
         g_variant_get(params, "(y)", &a);
         if (s->onSetLightbarMode) s->onSetLightbarMode(a);
+    } else if (strcmp(methodName, "SetCurrentProfile") == 0) {
+        g_variant_get(params, "(y)", &a);
+        if (s->onSetCurrentProfile) s->onSetCurrentProfile(a);
+    } else if (strcmp(methodName, "SetFanCurve") == 0) {
+        GVariant* cpuVariant = nullptr;
+        GVariant* gpuVariant = nullptr;
+        g_variant_get(params, "(y@ay@ay)", &a, &cpuVariant, &gpuVariant);
+
+        std::array<uint8_t, FAN_CURVE_POINTS> cpu{};
+        std::array<uint8_t, FAN_CURVE_POINTS> gpu{};
+
+        gsize cpuLen = 0;
+        gsize gpuLen = 0;
+        const guint8* cpuData = g_variant_get_fixed_array(cpuVariant, &cpuLen, sizeof(guint8));
+        const guint8* gpuData = g_variant_get_fixed_array(gpuVariant, &gpuLen, sizeof(guint8));
+
+        for (size_t i = 0; i < FAN_CURVE_POINTS && i < cpuLen; ++i) {
+            cpu[i] = cpuData[i];
+        }
+        for (size_t i = 0; i < FAN_CURVE_POINTS && i < gpuLen; ++i) {
+            gpu[i] = gpuData[i];
+        }
+
+        if (s->onSetFanCurve) s->onSetFanCurve(a, cpu, gpu);
+        g_variant_unref(cpuVariant);
+        g_variant_unref(gpuVariant);
     }
 
     g_dbus_method_invocation_return_value(invocation, nullptr);
@@ -159,6 +186,19 @@ void DBusServer::emitBrightnessChanged(uint8_t level) {
         "io.AuraU",
         "BrightnessChanged",
         g_variant_new("(y)", level),
+        nullptr
+    );
+}
+
+void DBusServer::emitCurrentProfileChanged(uint8_t profile) {
+    if (!m_conn) return;
+    g_dbus_connection_emit_signal(
+        m_conn,
+        nullptr,
+        "/io/AuraU",
+        "io.AuraU",
+        "CurrentProfileChanged",
+        g_variant_new("(y)", profile),
         nullptr
     );
 }
