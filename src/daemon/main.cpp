@@ -2,6 +2,7 @@
 #include "AuraCtrl.h"
 #include "InputListener.h"
 #include "DBusServer.h"
+#include "ProfileState.h"
 #include "json.hpp"
 #include <glib.h>
 #include <cstdio>
@@ -18,6 +19,8 @@ static AuraMode  currentMode       = AuraMode::Static;
 static uint8_t   currentBrightness = 2;
 static uint8_t   currentSpeed      = 0xeb;
 static uint8_t lightbarMode = 1; // 0=never, 1=AC only, 2=always
+static uint8_t   currentProfile    = 1; // 0=Silent, 1=Balanced, 2=Turbo
+static std::array<FanCurve, PROFILE_COUNT> fanCurves = defaultFanCurves();
 
 static std::array<Color, 4> zoneColors = {{
     {0xff, 0x00, 0x00},
@@ -40,6 +43,7 @@ static void saveState() {
     j["brightness"] = currentBrightness;
     j["speed"]      = currentSpeed;
     j["lightbar_mode"] = lightbarMode;
+    j["current_profile"] = currentProfile;
 
     for (int i = 0; i < 4; ++i) {
         j["zones"][i] = {
@@ -47,6 +51,12 @@ static void saveState() {
             {"g", zoneColors[i].g},
             {"b", zoneColors[i].b}
         };
+    }
+    for (int p = 0; p < PROFILE_COUNT; ++p) {
+        for (int i = 0; i < FAN_CURVE_POINTS; ++i) {
+            j["fan_curves"][p]["cpu"][i] = fanCurves[p].cpu[i];
+            j["fan_curves"][p]["gpu"][i] = fanCurves[p].gpu[i];
+        }
     }
 
     std::ofstream f(STATE_PATH);
@@ -66,10 +76,29 @@ static void loadState() {
         currentBrightness = j.value("brightness", 2);
         currentSpeed      = j.value("speed", 0xeb);
         lightbarMode = j.value("lightbar_mode", 1);
+        currentProfile = j.value("current_profile", 1);
+        if (currentProfile >= PROFILE_COUNT) currentProfile = 0;
         for (int i = 0; i < 4; ++i) {
             zoneColors[i].r = j["zones"][i].value("r", 255);
             zoneColors[i].g = j["zones"][i].value("g", 0);
             zoneColors[i].b = j["zones"][i].value("b", 0);
+        }
+        fanCurves = defaultFanCurves();
+        if (j.contains("fan_curves") && j["fan_curves"].is_array()) {
+            const auto& arr = j["fan_curves"];
+            for (int p = 0; p < PROFILE_COUNT && p < (int)arr.size(); ++p) {
+                if (!arr[p].is_object()) continue;
+                if (arr[p].contains("cpu") && arr[p]["cpu"].is_array()) {
+                    for (int i = 0; i < FAN_CURVE_POINTS && i < (int)arr[p]["cpu"].size(); ++i) {
+                        fanCurves[p].cpu[i] = arr[p]["cpu"][i].get<uint8_t>();
+                    }
+                }
+                if (arr[p].contains("gpu") && arr[p]["gpu"].is_array()) {
+                    for (int i = 0; i < FAN_CURVE_POINTS && i < (int)arr[p]["gpu"].size(); ++i) {
+                        fanCurves[p].gpu[i] = arr[p]["gpu"][i].get<uint8_t>();
+                    }
+                }
+            }
         }
         fprintf(stdout, "State loaded from %s\n", STATE_PATH);
     } catch (...) {
@@ -209,6 +238,20 @@ int main() {
         bool enabled = lightbarEnabled();
         fprintf(stdout, "Lightbar mode set to %d, enabled=%d\n", mode, enabled);
         usb.sendPacket(AuraCtrl::powerPacket(enabled), false);
+        saveState();
+    };
+    dbus.onSetCurrentProfile = [](uint8_t profile) {
+        currentProfile = profile % PROFILE_COUNT;
+        dbus.emitCurrentProfileChanged(currentProfile);
+        fprintf(stdout, "Current profile set to %d\n", currentProfile);
+        saveState();
+    };
+    dbus.onSetFanCurve = [](uint8_t profile, const std::array<uint8_t, FAN_CURVE_POINTS>& cpu,
+                            const std::array<uint8_t, FAN_CURVE_POINTS>& gpu) {
+        const uint8_t idx = profile % PROFILE_COUNT;
+        fanCurves[idx].cpu = cpu;
+        fanCurves[idx].gpu = gpu;
+        fprintf(stdout, "Updated fan curve for profile %d\n", idx);
         saveState();
     };
 

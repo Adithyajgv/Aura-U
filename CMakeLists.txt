@@ -42,6 +42,8 @@ target_compile_options(daura-u PRIVATE
 set(APP_SOURCES
     src/app/main.cpp
     src/app/DBusClient.cpp
+    src/app/HomePage.cpp
+    src/app/FansPage.cpp
     src/app/AuraPage.cpp
     src/app/MainWindow.cpp
 )

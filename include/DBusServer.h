@@ -2,6 +2,8 @@
 #include <gio/gio.h>
 #include <functional>
 #include <cstdint>
+#include <array>
+#include "ProfileState.h"
 
 class DBusServer {
 public:
@@ -15,12 +17,16 @@ public:
     std::function<void(uint8_t)> onSetBrightness;
     std::function<void()> onCycleMode;
     std::function<void(uint8_t)> onSetLightbarMode;
+    std::function<void(uint8_t)> onSetCurrentProfile;
+    std::function<void(uint8_t, const std::array<uint8_t, FAN_CURVE_POINTS>&,
+                       const std::array<uint8_t, FAN_CURVE_POINTS>&)> onSetFanCurve;
 
     bool start();
     void stop();
 
     void emitModeChanged(uint8_t mode);
     void emitBrightnessChanged(uint8_t level);
+    void emitCurrentProfileChanged(uint8_t profile);
 
     static void handleMethodCall(
         GDBusConnection* conn,

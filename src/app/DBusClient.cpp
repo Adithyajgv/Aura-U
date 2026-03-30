@@ -94,6 +94,30 @@ void DBusClient::setLightbarMode(uint8_t mode) {
         G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
 }
 
+void DBusClient::setCurrentProfile(uint8_t profile) {
+    g_dbus_proxy_call(m_proxy, "SetCurrentProfile",
+        g_variant_new("(y)", profile),
+        G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+}
+
+void DBusClient::setFanCurve(uint8_t profile, const FanCurve& curve) {
+    GVariantBuilder cpuBuilder;
+    g_variant_builder_init(&cpuBuilder, G_VARIANT_TYPE("ay"));
+    for (auto point : curve.cpu) g_variant_builder_add(&cpuBuilder, "y", point);
+
+    GVariantBuilder gpuBuilder;
+    g_variant_builder_init(&gpuBuilder, G_VARIANT_TYPE("ay"));
+    for (auto point : curve.gpu) g_variant_builder_add(&gpuBuilder, "y", point);
+
+    g_dbus_proxy_call(
+        m_proxy,
+        "SetFanCurve",
+        g_variant_new("(y@ay@ay)", profile,
+            g_variant_builder_end(&cpuBuilder),
+            g_variant_builder_end(&gpuBuilder)),
+        G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+}
+
 void DBusClient::cycleMode() {
     g_dbus_proxy_call(m_proxy, "CycleMode",
         nullptr,
@@ -120,6 +144,37 @@ bool DBusClient::getState(uint8_t& mode, uint8_t& brightness, uint8_t& speed, st
     }
 }
 
+bool DBusClient::getProfileState(uint8_t& currentProfile, std::array<FanCurve, PROFILE_COUNT>& curves) {
+    std::ifstream f("/var/lib/aura-u/state.json");
+    if (!f) return false;
+    try {
+        nlohmann::json j = nlohmann::json::parse(f);
+        currentProfile = j.value("current_profile", 1);
+        curves = defaultFanCurves();
+
+        if (j.contains("fan_curves") && j["fan_curves"].is_array()) {
+            const auto& arr = j["fan_curves"];
+            for (int p = 0; p < PROFILE_COUNT && p < (int)arr.size(); ++p) {
+                if (!arr[p].is_object()) continue;
+                if (arr[p].contains("cpu") && arr[p]["cpu"].is_array()) {
+                    for (int i = 0; i < FAN_CURVE_POINTS && i < (int)arr[p]["cpu"].size(); ++i) {
+                        curves[p].cpu[i] = arr[p]["cpu"][i].get<uint8_t>();
+                    }
+                }
+                if (arr[p].contains("gpu") && arr[p]["gpu"].is_array()) {
+                    for (int i = 0; i < FAN_CURVE_POINTS && i < (int)arr[p]["gpu"].size(); ++i) {
+                        curves[p].gpu[i] = arr[p]["gpu"][i].get<uint8_t>();
+                    }
+                }
+            }
+        }
+        if (currentProfile >= PROFILE_COUNT) currentProfile = 0;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 
 void DBusClient::onSignal(
     GDBusConnection*,
@@ -140,5 +195,8 @@ void DBusClient::onSignal(
     } else if (strcmp(signalName, "BrightnessChanged") == 0) {
         g_variant_get(params, "(y)", &val);
         if (c->onBrightnessChanged) c->onBrightnessChanged(val);
+    } else if (strcmp(signalName, "CurrentProfileChanged") == 0) {
+        g_variant_get(params, "(y)", &val);
+        if (c->onCurrentProfileChanged) c->onCurrentProfileChanged(val);
     }
 }
